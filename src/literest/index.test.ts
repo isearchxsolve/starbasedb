@@ -489,4 +489,39 @@ describe('LiteREST', () => {
             expect(query).not.toContain('DROP TABLE users')
         })
     })
+
+    describe('LiteREST Boundary & Edge Cases', () => {
+        it('should handle non-existent table gracefully and return error response', async () => {
+            vi.mocked(executeQuery).mockRejectedValueOnce(new Error('no such table: fake_table_xyz'))
+
+            const request = new Request('http://localhost/rest/main/fake_table_xyz', { method: 'GET' })
+            const response = await liteRest.handleRequest(request)
+
+            expect(response.status).toBe(500)
+            const json = await response.json()
+            expect(json.error).toContain('no such table: fake_table_xyz')
+        })
+
+        it('should handle negative primary key lookup safely', async () => {
+            vi.mocked(executeQuery).mockResolvedValueOnce([])
+
+            const request = new Request('http://localhost/rest/main/users/-1', { method: 'GET' })
+            const response = await liteRest.handleRequest(request)
+
+            expect(response.status).toBe(200)
+            const json = await response.json()
+            expect(json.result).toEqual([])
+        })
+
+        it('should ignore null query filter parameters without failing query construction', async () => {
+            vi.mocked(executeQuery).mockResolvedValueOnce([{ id: 1, name: 'Alice' }])
+
+            const request = new Request('http://localhost/rest/main/users?role=null&status=active', { method: 'GET' })
+            const response = await liteRest.handleRequest(request)
+
+            expect(response.status).toBe(200)
+            const json = await response.json()
+            expect(json.result).toBeDefined()
+        })
+    })
 })
